@@ -49,6 +49,7 @@ class BreatheActivity : ComponentActivity() {
         val isReelsBlock = intent.getBooleanExtra("is_reels_block", false)
         val isCreditLimit = intent.getBooleanExtra("is_credit_limit", false)
         val isDeepWorkBlock = intent.getBooleanExtra("is_deep_work_block", false)
+        val deepWorkReason = intent.getStringExtra("deep_work_reason")
 
         setContent {
             TejAstraTheme {
@@ -61,6 +62,7 @@ class BreatheActivity : ComponentActivity() {
                     isReelsBlock = isReelsBlock,
                     isCreditLimit = isCreditLimit,
                     isDeepWorkBlock = isDeepWorkBlock,
+                    deepWorkReason = deepWorkReason,
                     onProceed = {
                         TejAstraAccessibilityService.instance?.onBreatheComplete(packageName, timeLimit)
                         
@@ -99,6 +101,7 @@ fun BreatheScreen(
     isReelsBlock: Boolean,
     isCreditLimit: Boolean,
     isDeepWorkBlock: Boolean,
+    deepWorkReason: String?,
     onProceed: () -> Unit,
     onGoBack: () -> Unit,
 ) {
@@ -358,7 +361,7 @@ fun BreatheScreen(
                                 isSessionExpired -> "your time limit for ${appName.lowercase()} has ended." 
                                 isReelsBlock -> "short-form content is blocked on ${appName.lowercase()}."
                                 isCreditLimit -> "you have no attention credits left for today. reset happens at midnight."
-                                isDeepWorkBlock -> "You are in Deep Work Mode. Distractions are not allowed."
+                                isDeepWorkBlock -> deepWorkReason ?: "You are in Deep Work Mode. Distractions are not allowed."
                                 else -> "access restricted."
                             },
                             style = MaterialTheme.typography.bodyMedium,

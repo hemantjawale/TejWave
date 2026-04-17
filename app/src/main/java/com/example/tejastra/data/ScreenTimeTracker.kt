@@ -11,6 +11,7 @@ class ScreenTimeTracker(private val context: Context) {
 
     private val usageStatsManager =
         context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    private val prefsManager = PrefsManager(context)
 
     private val tag = "ScreenTimeTracker"
 
@@ -203,40 +204,53 @@ class ScreenTimeTracker(private val context: Context) {
     }
 
     /**
-     * Calculates the total attention credits consumed today based on usage rules.
+     * Calculates the total attention credits consumed today based on live tracking.
      */
     fun calculateAttentionCredits(): AttentionCredits {
-        val summary = getTodaySummary()
-        var consumed = 0.0
-
-        summary.appUsages.forEach { app ->
-            val minutes = app.usageTimeMinutes.toDouble()
-            
-            val multiplier = when {
-                app.packageName == "com.instagram.android" -> 10.0
-                app.packageName == "com.snapchat.android" -> 8.0
-                app.packageName == "com.facebook.katana" -> 8.0
-                app.packageName == "com.google.android.youtube" -> 3.0
-                app.packageName == "com.whatsapp" -> 1.0
-                app.categoryName in listOf("Image", "Productivity", "News") -> 2.0
-                app.categoryName == "Social" -> 5.0 // Generic social apps (FB, etc) get a middle penalty
-                app.categoryName == "Gaming" -> 5.0
-                app.categoryName == "Video" -> 3.0
-                else -> 0.0 // Default apps (Launcher, Phone, Settings, etc) don't consume credits
-            }
-            
-            consumed += (minutes * multiplier)
+        // Daily reset
+        val midnight = todayMidnight()
+        if (prefsManager.lastCreditResetTime < midnight) {
+            prefsManager.attentionCreditsConsumed = 0
+            prefsManager.lastCreditResetTime = System.currentTimeMillis()
         }
 
-        val totalConsumed = consumed.toInt()
+        val totalConsumed = prefsManager.attentionCreditsConsumed
         val totalCredits = 100
-        val remaining = (totalCredits - totalConsumed).coerceAtLeast(0)
+        val remaining = (totalCredits - totalConsumed).coerceAtMost(totalCredits).coerceAtLeast(0)
 
         return AttentionCredits(
             remainingCredits = remaining,
             consumedCredits = totalConsumed,
             totalCredits = totalCredits
         )
+    }
+
+    /**
+     * Increments the consumed credits based on current app usage in Normal Work mode.
+     */
+    fun recordUsage(packageName: String) {
+        val multiplier = getMultiplierForApp(packageName)
+        if (multiplier > 0) {
+            prefsManager.attentionCreditsConsumed += multiplier.toInt()
+        }
+    }
+
+    fun getMultiplierForApp(packageName: String): Double {
+        val app = try {
+            val pi = context.packageManager.getPackageInfo(packageName, 0)
+            // For simplicity, we check known distracting apps or category
+            // This is used by the live recorder
+            null
+        } catch (e: Exception) { null }
+
+        return when {
+            packageName == "com.instagram.android" -> 10.0
+            packageName == "com.snapchat.android" -> 8.0
+            packageName == "com.facebook.katana" -> 8.0
+            packageName == "com.google.android.youtube" -> 3.0
+            packageName == "com.whatsapp" -> 1.0
+            else -> 0.0
+        }
     }
 
     companion object {

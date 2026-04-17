@@ -29,6 +29,8 @@ class TejAstraAccessibilityService : AccessibilityService() {
     private var lastScheduleCheckTime = 0L
     private var currentMode: com.example.tejastra.data.TimeMode = com.example.tejastra.data.TimeMode.FREE_TIME
     private var breakStartTime: Long = 0L
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var usageRecordingTask: Runnable? = null
 
     // Track which section of the app the user is in
     private var currentAppSection = AppSection.UNKNOWN
@@ -81,6 +83,9 @@ class TejAstraAccessibilityService : AccessibilityService() {
         private const val SCROLL_THRESHOLD = 5 // scrolls per 30s = mindless
         private const val SCROLL_WINDOW_MS = 30_000L
 
+        /** Broadcast action sent after credits are consumed so the launcher can refresh. */
+        const val ACTION_CREDITS_UPDATED = "com.example.tejastra.CREDITS_UPDATED"
+
         // Social media packages
         const val INSTAGRAM = "com.instagram.android"
         const val YOUTUBE = "com.google.android.youtube"
@@ -112,6 +117,30 @@ class TejAstraAccessibilityService : AccessibilityService() {
         }
         serviceInfo = info
         Log.d(TAG, "TejAstra Accessibility Service connected")
+        startUsageRecording()
+    }
+
+    private fun startUsageRecording() {
+        if (usageRecordingTask != null) return
+        
+        usageRecordingTask = object : Runnable {
+            override fun run() {
+                // Deduct credits for credit-consuming apps in ALL modes.
+                // Deep Work already hard-blocks distracting apps, so they won't be in foreground.
+                // Break / Free Time still deduct — this is the user's chosen discipline rule.
+                currentForegroundPackage?.let { pkg ->
+                    if (isCreditConsumingApp(pkg)) {
+                        val tracker = ScreenTimeTracker(this@TejAstraAccessibilityService)
+                        tracker.recordUsage(pkg)
+                        Log.d(TAG, "Deducted credits for $pkg (mode=$currentMode)")
+                        // Notify the launcher to refresh credits display
+                        sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
+                    }
+                }
+                handler.postDelayed(this, 60000) // Every minute
+            }
+        }
+        handler.post(usageRecordingTask!!)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -158,10 +187,11 @@ class TejAstraAccessibilityService : AccessibilityService() {
             currentAppSection = AppSection.UNKNOWN
 
             // ── Mode-Based Blocking ──
-            if (isDistractingApp(packageName)) {
+            if (isDistractingApp(packageName) || (packageName == YOUTUBE && isViewingShorts(event))) {
                 when (currentMode) {
                     com.example.tejastra.data.TimeMode.DEEP_WORK -> {
-                        showDeepWorkBlockOverlay(packageName)
+                        val reason = if (packageName == YOUTUBE) "YouTube Shorts are blocked in Deep Work." else "You are in Deep Work Mode. Distractions are not allowed."
+                        showDeepWorkBlockOverlay(packageName, reason)
                         return
                     }
                     com.example.tejastra.data.TimeMode.WORK -> {
@@ -559,15 +589,24 @@ class TejAstraAccessibilityService : AccessibilityService() {
                packageName == REDDIT
     }
 
-    private fun showDeepWorkBlockOverlay(packageName: String) {
+    private fun showDeepWorkBlockOverlay(packageName: String, reason: String) {
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)
             putExtra("app_name", "distractions")
             putExtra("time_limit", 0)
             putExtra("is_deep_work_block", true)
+            putExtra("deep_work_reason", reason)
         }
         startActivity(intent)
+    }
+
+    private fun isViewingShorts(event: AccessibilityEvent): Boolean {
+        if (event.packageName != YOUTUBE) return false
+        val rootNode = rootInActiveWindow ?: return false
+        return youtubeShortIdentifiers.any { id ->
+            rootNode.findAccessibilityNodeInfosByViewId("$YOUTUBE:id/$id").isNotEmpty()
+        }
     }
 
     override fun onInterrupt() {
@@ -576,7 +615,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        usageRecordingTask?.let { handler.removeCallbacks(it) }
         instance = null
-        sessionTimer?.cancel()
     }
 }

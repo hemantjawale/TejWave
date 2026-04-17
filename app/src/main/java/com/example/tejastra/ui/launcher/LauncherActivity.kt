@@ -48,6 +48,7 @@ import com.example.tejastra.data.LocationModeManager
 import com.example.tejastra.data.PrefsManager
 import com.example.tejastra.data.ScreenTimeTracker
 import com.example.tejastra.data.Task
+import com.example.tejastra.service.TejAstraAccessibilityService
 import com.example.tejastra.ui.theme.*
 import com.example.tejastra.utils.toTitleCase
 import kotlinx.coroutines.launch
@@ -121,6 +122,26 @@ fun LauncherScreen() {
     var isCharging by remember { mutableStateOf(false) }
     var attentionCredits by remember { mutableStateOf<AttentionCredits?>(null) }
     var schedule by remember { mutableStateOf(prefsManager.getSchedule()) }
+
+    // Auto-refresh credits on broadcast from accessibility service
+    DisposableEffect(context) {
+        val creditReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action == TejAstraAccessibilityService.ACTION_CREDITS_UPDATED) {
+                    attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter(TejAstraAccessibilityService.ACTION_CREDITS_UPDATED)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(creditReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(creditReceiver, filter)
+        }
+        onDispose {
+            context.unregisterReceiver(creditReceiver)
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -423,12 +444,29 @@ fun LauncherScreen() {
                     if (currentCredits != null) {
                         Spacer(modifier = Modifier.height(24.dp))
                         Column {
-                            Text(
-                                text = "Attention credits",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextDisabled,
-                                letterSpacing = 2.sp,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Attention credits",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextDisabled,
+                                    letterSpacing = 2.sp,
+                                )
+                                Text(
+                                    text = "⟳",
+                                    modifier = Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) {
+                                        attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                                    },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextTertiary,
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -444,6 +482,13 @@ fun LauncherScreen() {
                                     color = TextTertiary,
                                 )
                             }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Instagram: 10 credits/min",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextDisabled,
+                                letterSpacing = 0.5.sp,
+                            )
                         }
                     }
 

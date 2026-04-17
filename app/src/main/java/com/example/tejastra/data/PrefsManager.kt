@@ -35,6 +35,8 @@ class PrefsManager(context: Context) {
         private const val KEY_SCHEDULE_BLOCKS = "schedule_blocks"
         private const val KEY_SCHEDULE_PREFS = "schedule_prefs"
         private const val KEY_LAST_SCHEDULE_GEN_DATE = "last_schedule_gen_date"
+        private const val KEY_ATTENTION_CREDITS_CONSUMED = "attention_credits_consumed"
+        private const val KEY_LAST_CREDIT_RESET_TIME = "last_credit_reset_time"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -480,6 +482,14 @@ class PrefsManager(context: Context) {
     var lastScheduleGenDate: String
         get() = prefs.getString(KEY_LAST_SCHEDULE_GEN_DATE, "") ?: ""
         set(value) = prefs.edit().putString(KEY_LAST_SCHEDULE_GEN_DATE, value).apply()
+
+    var attentionCreditsConsumed: Int
+        get() = prefs.getInt(KEY_ATTENTION_CREDITS_CONSUMED, 0)
+        set(value) = prefs.edit().putInt(KEY_ATTENTION_CREDITS_CONSUMED, value).apply()
+
+    var lastCreditResetTime: Long
+        get() = prefs.getLong(KEY_LAST_CREDIT_RESET_TIME, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_CREDIT_RESET_TIME, value).apply()
 
     // ── Onboarding ────────────────────────────────────────────────────
 

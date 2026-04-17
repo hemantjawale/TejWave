@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tejastra.data.*
+import com.example.tejastra.service.TejAstraAccessibilityService
 import com.example.tejastra.ui.theme.*
 import com.example.tejastra.utils.toTitleCase
 
@@ -66,6 +67,28 @@ fun DashboardScreen(
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var isDefaultLauncher by remember { mutableStateOf(false) }
 
+    var attentionCredits by remember { mutableStateOf<AttentionCredits?>(null) }
+
+    // Auto-refresh credits on broadcast from accessibility service
+    DisposableEffect(context) {
+        val creditReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action == TejAstraAccessibilityService.ACTION_CREDITS_UPDATED) {
+                    attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter(TejAstraAccessibilityService.ACTION_CREDITS_UPDATED)
+        if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(creditReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(creditReceiver, filter)
+        }
+        onDispose {
+            context.unregisterReceiver(creditReceiver)
+        }
+    }
+
     LaunchedEffect(refreshTrigger) {
         LocationModeManager.syncModeFromCurrentLocation(context, prefsManager)?.let { newModeId ->
             activeModeId = newModeId
@@ -87,6 +110,7 @@ fun DashboardScreen(
                 val hours = summary.totalMinutes / 60
                 val mins = summary.totalMinutes % 60
                 screenTimeText = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+                attentionCredits = tracker.calculateAttentionCredits()
             } catch (_: Exception) {
                 screenTimeText = "—"
             }
@@ -227,6 +251,59 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Tap to grant permission",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextTertiary,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Attention Credits Card ──
+            val currentCredits = attentionCredits
+            if (currentCredits != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Charcoal)
+                        .padding(28.dp),
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Attention credits",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextDisabled,
+                                letterSpacing = 2.sp,
+                            )
+                            Text(
+                                text = "⟳",
+                                modifier = Modifier.clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) {
+                                    attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextTertiary,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${currentCredits.remainingCredits}/${currentCredits.totalCredits}",
+                            style = MaterialTheme.typography.displayMedium,
+                            color = if (currentCredits.remainingCredits < 20) androidx.compose.ui.graphics.Color(0xFFE57373) else Snow,
+                            fontWeight = FontWeight.Thin,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Instagram: 10 credits/min · YouTube: 3/min",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextTertiary,
                         )
