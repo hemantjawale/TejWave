@@ -31,6 +31,16 @@ import com.example.tejastra.data.FocusMode
 import com.example.tejastra.data.PrefsManager
 import com.example.tejastra.ui.theme.*
 import com.example.tejastra.utils.toTitleCase
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
 
 /**
  * Settings screen for launcher favorites and app configuration.
@@ -49,9 +59,13 @@ fun SettingsScreen(
     var use24HourClock by remember { mutableStateOf(prefsManager.use24HourClock) }
     var showAppPicker by remember { mutableStateOf(false) }
     var installedApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var appUsageSummary by remember { mutableStateOf<com.example.tejastra.data.ScreenTimeSummary?>(null) }
 
     LaunchedEffect(Unit) {
         installedApps = getInstalledForSettings(context)
+        if (com.example.tejastra.data.ScreenTimeTracker.hasPermission(context)) {
+            appUsageSummary = com.example.tejastra.data.ScreenTimeTracker(context).getTodaySummary()
+        }
     }
 
     LazyColumn(
@@ -103,9 +117,189 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
             Divider(color = BorderSubtle, thickness = 0.5.dp)
 
+            // ── Analytics Dashboard ──
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Text(
+                text = "Analytics dashboard",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDisabled,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val distractSaved = prefsManager.timesDistractionBlocked
+            val timeSaved = distractSaved * 15 // Approx 15 mins saved per block
+            val valueAdded = prefsManager.productiveTimeMinutes
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Charcoal)
+                        .padding(16.dp)
+                ) {
+                    Text(text = "Time Saved", color = TextDisabled, style = MaterialTheme.typography.labelSmall)
+                    Text(text = "${timeSaved}m", color = Snow, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Charcoal)
+                        .padding(16.dp)
+                ) {
+                    Text(text = "Value Added", color = TextDisabled, style = MaterialTheme.typography.labelSmall)
+                    Text(text = "${valueAdded}m", color = Snow, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Charcoal)
+                        .padding(16.dp)
+                ) {
+                    Text(text = "Blocks", color = TextDisabled, style = MaterialTheme.typography.labelSmall)
+                    Text(text = "$distractSaved", color = Snow, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Charcoal)
+                        .padding(16.dp)
+                ) {
+                    Text(text = "Sessions", color = TextDisabled, style = MaterialTheme.typography.labelSmall)
+                    Text(text = "${prefsManager.productiveSessionsCompleted}", color = Snow, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            var aiInsight by remember { mutableStateOf("") }
+            var isFetchingInsight by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+
+            if (aiInsight.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF2A2A35))
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "✨ $aiInsight",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Snow,
+                        lineHeight = 20.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            Button(
+                onClick = {
+                    isFetchingInsight = true
+                    scope.launch {
+                        aiInsight = fetchGroqInsight(timeSaved, valueAdded, distractSaved)
+                        isFetchingInsight = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Snow, contentColor = Void),
+                enabled = !isFetchingInsight
+            ) {
+                Text(if (isFetchingInsight) "Analyzing data..." else "Generate AI Tip", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+            Divider(color = BorderSubtle, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ── Credit Usage by App ──
+            Text(
+                text = "Credit consumption by app",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDisabled,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val tracker = remember { com.example.tejastra.data.ScreenTimeTracker(context) }
+            val appsWithCredit = appUsageSummary?.appUsages?.mapNotNull { usage ->
+                val credits = (usage.usageTimeMinutes * tracker.getMultiplierForApp(usage.packageName)).toInt()
+                if (credits > 0) usage to credits else null
+            }?.sortedByDescending { it.second }
+
+            if (appsWithCredit.isNullOrEmpty()) {
+                Text(
+                    text = "No distracting apps used today. Great job!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextTertiary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Charcoal)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    appsWithCredit.forEach { (usage, credits) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(Color(0xFFE57373))
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = usage.appName.toTitleCase(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Snow
+                                    )
+                                    Text(
+                                        text = "${usage.usageTimeMinutes} mins",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextTertiary
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "-$credits credits",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color(0xFFE57373),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+            Divider(color = BorderSubtle, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(32.dp))
 
             Row(
@@ -1082,3 +1276,52 @@ fun getInstalledForSettings(context: Context): List<AppInfo> {
 }
 
 private fun Double.formatCoordinate(): String = String.format("%.5f", this)
+
+suspend fun fetchGroqInsight(timeSaved: Int, valueAdded: Int, distractSaved: Int): String {
+    return withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val apiKey = com.example.tejastra.BuildConfig.GROQ_API_KEY
+        
+        val json = JSONObject()
+        json.put("model", "llama-3.1-8b-instant")
+        val messages = JSONArray()
+        val systemMessage = JSONObject()
+        systemMessage.put("role", "system")
+        systemMessage.put("content", "You are an AI productivity coach. Analyze the given stats: 'Time Saved' is estimated time recovered from distracting apps. 'Productive time' is time spent in productive sessions. 'Distractions blocked' is how many times the user was stopped from doomscrolling. Give a short, punchy, 1-2 sentence tip/insight. No formatting, just pure text.")
+        
+        val userMessage = JSONObject()
+        userMessage.put("role", "user")
+        userMessage.put("content", "Time saved: $timeSaved minutes. Productive time: $valueAdded minutes. Distractions blocked: $distractSaved.")
+        
+        messages.put(systemMessage)
+        messages.put(userMessage)
+        json.put("messages", messages)
+        json.put("temperature", 0.7)
+        
+        val body = json.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url("https://api.groq.com/openai/v1/chat/completions")
+            .post(body)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+            
+        try {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val responseBody = response.body?.string()
+                if (responseBody != null) {
+                    val jsonResponse = JSONObject(responseBody)
+                    val choices = jsonResponse.getJSONArray("choices")
+                    val firstChoice = choices.getJSONObject(0)
+                    val message = firstChoice.getJSONObject("message")
+                    return@withContext message.getString("content")
+                }
+            }
+            return@withContext "Error analyzing data: ${response.code}"
+        } catch (e: Exception) {
+            return@withContext "Failed to connect to AI: ${e.message}"
+        }
+        "Failed to generate insight."
+    }
+}

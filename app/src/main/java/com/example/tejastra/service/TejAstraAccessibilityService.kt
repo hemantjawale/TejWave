@@ -187,6 +187,8 @@ class TejAstraAccessibilityService : AccessibilityService() {
                         if (focusDuration >= FOCUS_SESSION_MS) {
                             // Reward user!
                             prefsManager.purchasedCredits += 10
+                            prefsManager.productiveSessionsCompleted += 1
+                            prefsManager.productiveTimeMinutes += 1
                             sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
                             
                             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -524,6 +526,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showBreatheOverlay(packageName: String, appName: String, timeLimitMinutes: Int) {
+        prefsManager.timesDistractionBlocked += 1
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)
@@ -534,6 +537,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showScrollBlockOverlay(packageName: String) {
+        prefsManager.timesDistractionBlocked += 1
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)
@@ -545,6 +549,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showDailyLimitOverlay(packageName: String, appName: String) {
+        prefsManager.timesDistractionBlocked += 1
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)
@@ -556,6 +561,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showReelsBlockedNotification(packageName: String) {
+        prefsManager.timesDistractionBlocked += 1
         Log.d(TAG, "Reels blocked for $packageName")
         val appName = prefsManager.getBlockedAppConfig(packageName)?.appName ?: "this app"
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
@@ -569,6 +575,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showCreditLimitOverlay(packageName: String) {
+        prefsManager.timesDistractionBlocked += 1
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)
@@ -675,6 +682,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun showDeepWorkBlockOverlay(packageName: String, reason: String) {
+        prefsManager.timesDistractionBlocked += 1
         val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("package_name", packageName)

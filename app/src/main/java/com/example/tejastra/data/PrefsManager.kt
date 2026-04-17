@@ -38,6 +38,9 @@ class PrefsManager(context: Context) {
         private const val KEY_ATTENTION_CREDITS_CONSUMED = "attention_credits_consumed"
         private const val KEY_LAST_CREDIT_RESET_TIME = "last_credit_reset_time"
         private const val KEY_PURCHASED_CREDITS = "purchased_credits"
+        private const val KEY_TIMES_DISTRACTION_BLOCKED = "times_distraction_blocked"
+        private const val KEY_PRODUCTIVE_SESSIONS_COMPLETED = "productive_sessions_completed"
+        private const val KEY_PRODUCTIVE_TIME_MINUTES = "productive_time_minutes"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -496,6 +499,20 @@ class PrefsManager(context: Context) {
     var purchasedCredits: Int
         get() = prefs.getInt(KEY_PURCHASED_CREDITS, 0)
         set(value) = prefs.edit().putInt(KEY_PURCHASED_CREDITS, value).apply()
+
+    // ── Analytics ─────────────────────────────────────────────────────
+
+    var timesDistractionBlocked: Int
+        get() = prefs.getInt(KEY_TIMES_DISTRACTION_BLOCKED, 0)
+        set(value) = prefs.edit().putInt(KEY_TIMES_DISTRACTION_BLOCKED, value).apply()
+
+    var productiveSessionsCompleted: Int
+        get() = prefs.getInt(KEY_PRODUCTIVE_SESSIONS_COMPLETED, 0)
+        set(value) = prefs.edit().putInt(KEY_PRODUCTIVE_SESSIONS_COMPLETED, value).apply()
+
+    var productiveTimeMinutes: Int
+        get() = prefs.getInt(KEY_PRODUCTIVE_TIME_MINUTES, 0)
+        set(value) = prefs.edit().putInt(KEY_PRODUCTIVE_TIME_MINUTES, value).apply()
 
     // ── Onboarding ────────────────────────────────────────────────────
 

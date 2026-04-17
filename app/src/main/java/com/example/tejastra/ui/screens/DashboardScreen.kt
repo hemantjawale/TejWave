@@ -68,6 +68,7 @@ fun DashboardScreen(
     var isDefaultLauncher by remember { mutableStateOf(false) }
 
     var attentionCredits by remember { mutableStateOf<AttentionCredits?>(null) }
+    var appUsageSummary by remember { mutableStateOf<ScreenTimeSummary?>(null) }
 
     // Auto-refresh credits on broadcast from accessibility service
     DisposableEffect(context) {
@@ -106,6 +107,7 @@ fun DashboardScreen(
             try {
                 val tracker = ScreenTimeTracker(context)
                 val summary = tracker.getTodaySummary()
+                appUsageSummary = summary
                 totalMinutes = summary.totalMinutes
                 val hours = summary.totalMinutes / 60
                 val mins = summary.totalMinutes % 60
@@ -126,73 +128,26 @@ fun DashboardScreen(
     ) {
         item {
             Spacer(modifier = Modifier.height(48.dp))
-
-            Text(
-                text = "Focus modes",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextDisabled,
-                letterSpacing = 2.sp,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                focusModes.forEach { mode ->
-                    val isSelected = mode.id == activeModeId
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (isSelected) Snow else Charcoal)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
-                                prefsManager.activeFocusModeId = mode.id
-                                activeModeId = mode.id
-                                blockedApps = prefsManager.getBlockedApps(mode.id)
-                                onNavigateToFocusMode(mode.id)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                    ) {
-                        Text(
-                            text = mode.name,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (isSelected) Void else Snow,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = focusModes.find { it.id == activeModeId }?.description.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Header ──
+            
+            // ── Header with Greeting and Settings ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val calendar = java.util.Calendar.getInstance()
+                val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                val greeting = when (hour) {
+                    in 0..11 -> "Good Morning"
+                    in 12..16 -> "Good Afternoon"
+                    else -> "Good Evening"
+                }
                 Text(
-                    text = "TejAstra",
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = "👋 $greeting, Aachal",
+                    style = MaterialTheme.typography.titleMedium,
                     color = Snow,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-
                 androidx.compose.material3.Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
@@ -204,114 +159,140 @@ fun DashboardScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Screen Time Card ──
+            // ── Current Mode & Credits Box ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(Charcoal)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onNavigateToScreenTime() }
-                    .padding(28.dp),
+                    .padding(24.dp),
             ) {
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Today's screen time",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextDisabled,
-                            letterSpacing = 2.sp,
-                        )
-                        Text(
-                            text = "⟳",
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { refreshTrigger++ },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextTertiary,
-                        )
-                    }
+                    val currentModeName = focusModes.find { it.id == activeModeId }?.name ?: "UNKNOWN"
+                    Text(text = "🧠 Current Mode: ${currentModeName.uppercase()}", style = MaterialTheme.typography.bodyMedium, color = Snow, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = screenTimeText,
-                        style = MaterialTheme.typography.displayMedium,
-                        color = Snow,
-                        fontWeight = FontWeight.Thin,
-                    )
-                    if (!hasUsagePermission) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Tap to grant permission",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextTertiary,
-                        )
+                    
+                    val calendar = java.util.Calendar.getInstance()
+                    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                    val activeScheduleBlock = prefsManager.getSchedule().find { block ->
+                        val startMins = block.startHour * 60 + block.startMinute
+                        val endMins = block.endHour * 60 + block.endMinute
+                        val currentMins = hour * 60 + calendar.get(java.util.Calendar.MINUTE)
+                        currentMins in startMins until endMins && block.daysOfWeek.contains(calendar.get(java.util.Calendar.DAY_OF_WEEK))
+                    }
+                    val timeLeftStr = if (activeScheduleBlock != null) {
+                        val endMins = activeScheduleBlock.endHour * 60 + activeScheduleBlock.endMinute
+                        val currentMins = hour * 60 + calendar.get(java.util.Calendar.MINUTE)
+                        val remaining = endMins - currentMins
+                        "${remaining / 60}h ${remaining % 60}m"
+                    } else "Active"
+                    
+                    Text(text = "⏱ Time Left: $timeLeftStr", style = MaterialTheme.typography.bodyMedium, color = Snow)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    val currentCredits = attentionCredits
+                    if (currentCredits != null) {
+                        Text(text = "💰 Attention Credits: ${currentCredits.remainingCredits} / ${currentCredits.totalCredits}", style = MaterialTheme.typography.titleMedium, color = Snow, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(
+                            onClick = { onNavigateToFocusMode(activeModeId) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Snow, contentColor = Void),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Configure Focus", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                prefsManager.activeFocusModeId = "break"
+                                activeModeId = "break"
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceDim, contentColor = Snow),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Take Break", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Today Summary ──
+            Text(text = "📊 Today Summary", style = MaterialTheme.typography.titleMedium, color = Snow, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Attention Credits Card ──
-            val currentCredits = attentionCredits
-            if (currentCredits != null) {
-                Box(
+            val focusTime = prefsManager.productiveTimeMinutes
+            val focusHours = focusTime / 60
+            val focusMins = focusTime % 60
+            val focusTimeStr = if (focusHours > 0) "${focusHours}h ${focusMins}m" else "${focusMins}m"
+            val distractions = prefsManager.timesDistractionBlocked
+            val focusScore = if (totalMinutes > 0) ((focusTime.toFloat() / (totalMinutes + focusTime).toFloat()) * 100).toInt().coerceAtMost(100) else 100
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Charcoal)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "🔥 Focus Time: $focusTimeStr", style = MaterialTheme.typography.bodyMedium, color = Snow)
+                Text(text = "⚠️ Distractions: $distractions", style = MaterialTheme.typography.bodyMedium, color = Snow)
+                Text(text = "🏆 Focus Score: $focusScore%", style = MaterialTheme.typography.bodyMedium, color = Snow)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Top Apps Used ──
+            Text(text = "📱 Top Apps Used", style = MaterialTheme.typography.titleMedium, color = Snow, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val tracker = remember { ScreenTimeTracker(context) }
+            val appsWithCredit = appUsageSummary?.appUsages?.mapNotNull { usage ->
+                val credits = (usage.usageTimeMinutes * tracker.getMultiplierForApp(usage.packageName)).toInt()
+                if (credits > 0) usage to credits else null
+            }?.sortedByDescending { it.second }?.take(5)
+
+            if (appsWithCredit.isNullOrEmpty()) {
+                Text(text = "No distracting apps used today. Great job!", style = MaterialTheme.typography.bodyMedium, color = TextTertiary)
+            } else {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(Charcoal)
-                        .padding(28.dp),
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column {
+                    appsWithCredit.forEachIndexed { index, (usage, credits) ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Attention credits",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextDisabled,
-                                letterSpacing = 2.sp,
+                                text = "${index + 1}. ${usage.appName.toTitleCase()}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Snow
                             )
                             Text(
-                                text = "⟳",
-                                modifier = Modifier.clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) {
-                                    attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                color = TextTertiary,
+                                text = "$credits credits",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = androidx.compose.ui.graphics.Color(0xFFE57373)
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "${currentCredits.remainingCredits}/${currentCredits.totalCredits}",
-                            style = MaterialTheme.typography.displayMedium,
-                            color = if (currentCredits.remainingCredits < 20) androidx.compose.ui.graphics.Color(0xFFE57373) else Snow,
-                            fontWeight = FontWeight.Thin,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "⊖ Instagram: −10/min  ⊕ Productive: +5/min",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextTertiary,
-                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // ── Permissions Status ──
             val allPermissionsGranted = hasUsagePermission && hasAccessibilityPermission && hasOverlayPermission && isDefaultLauncher
