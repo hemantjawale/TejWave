@@ -207,7 +207,7 @@ class ScreenTimeTracker(private val context: Context) {
      * Calculates the total attention credits consumed today based on live tracking.
      */
     fun calculateAttentionCredits(): AttentionCredits {
-        // Daily reset
+        // Daily reset (only resets consumed, not purchased)
         val midnight = todayMidnight()
         if (prefsManager.lastCreditResetTime < midnight) {
             prefsManager.attentionCreditsConsumed = 0
@@ -215,7 +215,9 @@ class ScreenTimeTracker(private val context: Context) {
         }
 
         val totalConsumed = prefsManager.attentionCreditsConsumed
-        val totalCredits = 100
+        val baseCredits = 100
+        val purchased = prefsManager.purchasedCredits
+        val totalCredits = baseCredits + purchased
         val remaining = (totalCredits - totalConsumed).coerceAtMost(totalCredits).coerceAtLeast(0)
 
         return AttentionCredits(

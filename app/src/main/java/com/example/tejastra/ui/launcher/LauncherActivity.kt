@@ -51,6 +51,8 @@ import com.example.tejastra.data.Task
 import com.example.tejastra.service.TejAstraAccessibilityService
 import com.example.tejastra.ui.theme.*
 import com.example.tejastra.utils.toTitleCase
+import com.razorpay.Checkout
+import com.razorpay.PaymentResultListener
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -59,11 +61,20 @@ import java.util.*
  * Minimal launcher — pure black, shows time, screen time, tasks, 4 favorite apps (text only).
  * Swipe up to reveal app drawer with text-only app names A–Z sorted.
  */
-class LauncherActivity : ComponentActivity() {
+class LauncherActivity : ComponentActivity(), PaymentResultListener {
+
+    companion object {
+        /** Bridge for Razorpay payment result → Compose state */
+        var onPaymentResult: ((success: Boolean, credits: Int) -> Unit)? = null
+        private const val RAZORPAY_KEY_ID = "rzp_live_Ru1kOSbo78LMRS"
+        private const val CREDITS_PER_PURCHASE = 50
+        private const val PRICE_PAISE = 100 // ₹1 = 100 paise
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        Checkout.preload(applicationContext)
         
         // Hide Status Bar for Extreme Full Screen
         val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
@@ -77,6 +88,40 @@ class LauncherActivity : ComponentActivity() {
         }
     }
 
+    fun startCreditPurchase() {
+        val checkout = Checkout()
+        checkout.setKeyID(RAZORPAY_KEY_ID)
+
+        try {
+            val options = org.json.JSONObject()
+            options.put("name", "TejAstra")
+            options.put("description", "Buy $CREDITS_PER_PURCHASE Attention Credits")
+            options.put("currency", "INR")
+            options.put("amount", PRICE_PAISE) // ₹1 in paise
+            options.put("retry", org.json.JSONObject().put("enabled", true).put("max_count", 3))
+
+            val theme = org.json.JSONObject()
+            theme.put("color", "#1A1A1A")
+            options.put("theme", theme)
+
+            checkout.open(this, options)
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Payment error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentID: String?) {
+        // Add 50 credits to the total pool
+        val prefsManager = PrefsManager(this)
+        prefsManager.purchasedCredits += CREDITS_PER_PURCHASE
+        android.widget.Toast.makeText(this, "✓ $CREDITS_PER_PURCHASE credits added!", android.widget.Toast.LENGTH_SHORT).show()
+        onPaymentResult?.invoke(true, CREDITS_PER_PURCHASE)
+    }
+
+    override fun onPaymentError(code: Int, response: String?) {
+        android.widget.Toast.makeText(this, "Payment cancelled", android.widget.Toast.LENGTH_SHORT).show()
+        onPaymentResult?.invoke(false, 0)
+    }
 }
 
 data class AppItem(
@@ -489,6 +534,40 @@ fun LauncherScreen() {
                                 color = TextDisabled,
                                 letterSpacing = 0.5.sp,
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // ── Buy Credits Button ──
+                            val activity = context as? LauncherActivity
+                            if (activity != null) {
+                                // Listen for payment result to refresh credits
+                                DisposableEffect(Unit) {
+                                    LauncherActivity.onPaymentResult = { success, _ ->
+                                        if (success) {
+                                            attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                                        }
+                                    }
+                                    onDispose { LauncherActivity.onPaymentResult = null }
+                                }
+
+                                Text(
+                                    text = "Buy 50 credits · ₹1",
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Charcoal)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) {
+                                            activity.startCreditPurchase()
+                                        }
+                                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Snow,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 1.sp,
+                                )
+                            }
                         }
                     }
 

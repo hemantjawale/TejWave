@@ -37,6 +37,7 @@ class PrefsManager(context: Context) {
         private const val KEY_LAST_SCHEDULE_GEN_DATE = "last_schedule_gen_date"
         private const val KEY_ATTENTION_CREDITS_CONSUMED = "attention_credits_consumed"
         private const val KEY_LAST_CREDIT_RESET_TIME = "last_credit_reset_time"
+        private const val KEY_PURCHASED_CREDITS = "purchased_credits"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -490,6 +491,11 @@ class PrefsManager(context: Context) {
     var lastCreditResetTime: Long
         get() = prefs.getLong(KEY_LAST_CREDIT_RESET_TIME, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_CREDIT_RESET_TIME, value).apply()
+
+    /** Extra credits purchased via Razorpay — added on top of the base 100 */
+    var purchasedCredits: Int
+        get() = prefs.getInt(KEY_PURCHASED_CREDITS, 0)
+        set(value) = prefs.edit().putInt(KEY_PURCHASED_CREDITS, value).apply()
 
     // ── Onboarding ────────────────────────────────────────────────────
 
