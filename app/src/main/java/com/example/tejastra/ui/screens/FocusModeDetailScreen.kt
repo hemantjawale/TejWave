@@ -59,6 +59,7 @@ fun FocusModeDetailScreen(
     modeId: String,
     onBack: () -> Unit,
     onNavigateToAddApp: (String) -> Unit,
+    onNavigateToNotificationFilters: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val prefsManager = remember { PrefsManager(context) }
@@ -174,6 +175,45 @@ fun FocusModeDetailScreen(
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
+
+            Text(
+                text = "Smart Notifications",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDisabled,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Charcoal, RoundedCornerShape(16.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        onNavigateToNotificationFilters(modeId)
+                    }
+                    .padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Notification Filters",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Snow,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Block notifications except for specific contacts or urgent keywords.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary,
+                    )
+                }
+                Text("→", color = TextTertiary, style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Location automation",

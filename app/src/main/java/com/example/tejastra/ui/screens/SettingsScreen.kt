@@ -1024,7 +1024,7 @@ private fun ClockFormatChip(
     }
 }
 
-private fun getInstalledForSettings(context: Context): List<AppInfo> {
+fun getInstalledForSettings(context: Context): List<AppInfo> {
     val pm = context.packageManager
     val intent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)

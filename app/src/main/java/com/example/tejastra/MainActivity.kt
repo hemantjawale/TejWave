@@ -92,6 +92,17 @@ fun TejAstraApp() {
                 modeId = backStackEntry.arguments?.getString("modeId").orEmpty(),
                 onBack = { navController.popBackStack() },
                 onNavigateToAddApp = { mode -> navController.navigate("add_app/$mode") },
+                onNavigateToNotificationFilters = { mode -> navController.navigate("notification_filters/$mode") },
+            )
+        }
+
+        composable(
+            route = "notification_filters/{modeId}",
+            arguments = listOf(navArgument("modeId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            NotificationFilterScreen(
+                modeId = backStackEntry.arguments?.getString("modeId").orEmpty(),
+                onBack = { navController.popBackStack() },
             )
         }
     }

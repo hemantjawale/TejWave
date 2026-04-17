@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
@@ -74,11 +75,6 @@ class LauncherActivity : ComponentActivity() {
         }
     }
 
-    // Prevent back from exiting the launcher
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // Do nothing — this IS the home screen
-    }
 }
 
 data class AppItem(
@@ -142,6 +138,18 @@ fun LauncherScreen() {
         context.registerReceiver(receiver, filter)
         onDispose {
             context.unregisterReceiver(receiver)
+        }
+    }
+
+    BackHandler(enabled = true) {
+        if (showDrawer) {
+            showDrawer = false
+            searchQuery = ""
+        } else if (showAddTask) {
+            showAddTask = false
+            newTaskTitle = ""
+        } else {
+            // Do nothing — this IS the home screen
         }
     }
 

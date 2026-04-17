@@ -31,6 +31,7 @@ class PrefsManager(context: Context) {
         private const val KEY_BOTTOM_RIGHT_APP = "bottom_right_app"
         private const val KEY_DRAWER_KEYBOARD_ON_OPEN = "drawer_keyboard_on_open"
         private const val KEY_CLOCK_24_HOUR = "clock_24_hour"
+        private const val KEY_MODE_NOTIFICATION_RULES = "mode_notification_rules"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -116,6 +117,87 @@ class PrefsManager(context: Context) {
 
     fun getBlockedAppConfig(packageName: String, modeId: String = activeFocusModeId): BlockedApp? {
         return getBlockedApps(modeId).find { it.packageName == packageName && it.isEnabled }
+    }
+
+    // ── Notification Rules ────────────────────────────────────────────
+
+    fun getNotificationFilterRules(modeId: String = activeFocusModeId): List<NotificationFilterRule> {
+        val modeJson = prefs.getString(KEY_MODE_NOTIFICATION_RULES, null)
+        if (!modeJson.isNullOrBlank()) {
+            val root = JSONObject(modeJson)
+            if (root.has(modeId)) {
+                return parseNotificationRules(root.optJSONArray(modeId)?.toString() ?: "[]")
+            }
+        }
+        return emptyList()
+    }
+
+    private fun parseNotificationRules(json: String): List<NotificationFilterRule> {
+        val arr = JSONArray(json)
+        val list = mutableListOf<NotificationFilterRule>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            
+            val contactsArr = obj.optJSONArray("allowedContacts")
+            val contacts = mutableListOf<String>()
+            if (contactsArr != null) {
+                for (j in 0 until contactsArr.length()) {
+                    contacts.add(contactsArr.getString(j))
+                }
+            }
+            
+            val keywordsArr = obj.optJSONArray("urgencyKeywords")
+            val keywords = mutableListOf<String>()
+            if (keywordsArr != null) {
+                for (j in 0 until keywordsArr.length()) {
+                    keywords.add(keywordsArr.getString(j))
+                }
+            }
+
+            list.add(
+                NotificationFilterRule(
+                    packageName = obj.getString("packageName"),
+                    appName = obj.getString("appName"),
+                    isAllowed = obj.optBoolean("isAllowed", false),
+                    allowedContacts = contacts,
+                    urgencyKeywords = keywords,
+                )
+            )
+        }
+        return list
+    }
+
+    fun saveNotificationFilterRules(rules: List<NotificationFilterRule>, modeId: String = activeFocusModeId) {
+        val arr = JSONArray()
+        rules.forEach { rule ->
+            val obj = JSONObject().apply {
+                put("packageName", rule.packageName)
+                put("appName", rule.appName)
+                put("isAllowed", rule.isAllowed)
+                
+                val contactsArr = JSONArray()
+                rule.allowedContacts.forEach { contactsArr.put(it) }
+                put("allowedContacts", contactsArr)
+                
+                val keywordsArr = JSONArray()
+                rule.urgencyKeywords.forEach { keywordsArr.put(it) }
+                put("urgencyKeywords", keywordsArr)
+            }
+            arr.put(obj)
+        }
+
+        val root = JSONObject(prefs.getString(KEY_MODE_NOTIFICATION_RULES, "{}") ?: "{}")
+        root.put(modeId, arr)
+        prefs.edit().putString(KEY_MODE_NOTIFICATION_RULES, root.toString()).apply()
+    }
+
+    fun getNotificationRule(packageName: String, modeId: String = activeFocusModeId): NotificationFilterRule? {
+        return getNotificationFilterRules(modeId).find { it.packageName == packageName }
+    }
+
+    fun isNotificationFeatureEnabled(): Boolean {
+        // Feature is enabled if there are any rules in the active mode
+        return getNotificationFilterRules(activeFocusModeId).isNotEmpty()
     }
 
     fun getFocusModes(): List<FocusMode> {

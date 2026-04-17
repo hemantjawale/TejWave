@@ -87,3 +87,15 @@ data class ScreenTimeSummary(
     val appUsages: List<AppUsageInfo>,
     val unlockCount: Int = 0,
 )
+
+/**
+ * Notification filter rule for an app.
+ * Controls which notifications are allowed through during focus.
+ */
+data class NotificationFilterRule(
+    val packageName: String,
+    val appName: String,
+    val isAllowed: Boolean = false,          // Allow ALL notifications from this app
+    val allowedContacts: List<String> = emptyList(), // Only show notifications from these people
+    val urgencyKeywords: List<String> = emptyList(), // Show if message contains these keywords
+)
