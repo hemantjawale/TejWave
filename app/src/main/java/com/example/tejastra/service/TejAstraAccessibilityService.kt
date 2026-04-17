@@ -32,6 +32,13 @@ class TejAstraAccessibilityService : AccessibilityService() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var usageRecordingTask: Runnable? = null
 
+    // ── Continuous Focus Tracking ──
+    private var continuousFocusStartTime: Long = 0L
+    private var lastInteractionTime: Long = 0L
+    private val INACTIVITY_THRESHOLD_MS = 30_000L // 30 seconds idle resets timer
+    private val FOCUS_SESSION_MS = 60_000L // 1 minute focus threshold
+    private var focusProgressTask: Runnable? = null
+
     // Track which section of the app the user is in
     private var currentAppSection = AppSection.UNKNOWN
 
@@ -108,7 +115,8 @@ class TejAstraAccessibilityService : AccessibilityService() {
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                     AccessibilityEvent.TYPE_VIEW_SCROLLED or
-                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                    AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
@@ -118,6 +126,7 @@ class TejAstraAccessibilityService : AccessibilityService() {
         serviceInfo = info
         Log.d(TAG, "TejAstra Accessibility Service connected")
         startUsageRecording()
+        startFocusSessionTracking()
     }
 
     private fun startUsageRecording() {
@@ -151,6 +160,67 @@ class TejAstraAccessibilityService : AccessibilityService() {
         handler.post(usageRecordingTask!!)
     }
 
+    private fun startFocusSessionTracking() {
+        if (focusProgressTask != null) return
+        
+        focusProgressTask = object : Runnable {
+            override fun run() {
+                val now = System.currentTimeMillis()
+                val pkg = currentForegroundPackage
+                val isProductive = pkg != null && ScreenTimeTracker(this@TejAstraAccessibilityService).isProductiveApp(pkg)
+                val isWorkMode = currentMode == com.example.tejastra.data.TimeMode.WORK || currentMode == com.example.tejastra.data.TimeMode.DEEP_WORK
+
+                if (isProductive && isWorkMode) {
+                    if (continuousFocusStartTime == 0L) {
+                        continuousFocusStartTime = now
+                        lastInteractionTime = now
+                    }
+                    
+                    val inactiveTime = now - lastInteractionTime
+                    if (inactiveTime > INACTIVITY_THRESHOLD_MS) {
+                        // Reset due to inactivity
+                        continuousFocusStartTime = now
+                        lastInteractionTime = now
+                        sendFocusProgressUpdate(0f, "Idle...")
+                    } else {
+                        val focusDuration = now - continuousFocusStartTime
+                        if (focusDuration >= FOCUS_SESSION_MS) {
+                            // Reward user!
+                            prefsManager.purchasedCredits += 10
+                            sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
+                            
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                android.widget.Toast.makeText(this@TejAstraAccessibilityService, "Focus Session Completed – You earned 10 credits", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            
+                            // Reset timer for next session
+                            continuousFocusStartTime = now
+                            lastInteractionTime = now
+                            sendFocusProgressUpdate(0f, "Earned 10 credits!")
+                        } else {
+                            val progress = focusDuration.toFloat() / FOCUS_SESSION_MS.toFloat()
+                            sendFocusProgressUpdate(progress, "Focusing...")
+                        }
+                    }
+                } else {
+                    if (continuousFocusStartTime != 0L) {
+                        continuousFocusStartTime = 0L
+                        sendFocusProgressUpdate(0f, "")
+                    }
+                }
+                handler.postDelayed(this, 1000) // Update every second
+            }
+        }
+        handler.post(focusProgressTask!!)
+    }
+
+    private fun sendFocusProgressUpdate(progress: Float, status: String) {
+        val intent = Intent("com.example.tejastra.FOCUS_PROGRESS")
+        intent.putExtra("progress", progress)
+        intent.putExtra("status", status)
+        sendBroadcast(intent)
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
@@ -160,9 +230,12 @@ class TejAstraAccessibilityService : AccessibilityService() {
             }
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 handleScroll(event)
+                lastInteractionTime = System.currentTimeMillis()
             }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
                 handleContentChange(event)
+                lastInteractionTime = System.currentTimeMillis()
             }
         }
 

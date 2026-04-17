@@ -166,18 +166,26 @@ fun LauncherScreen() {
     var batteryLevel by remember { mutableIntStateOf(-1) }
     var isCharging by remember { mutableStateOf(false) }
     var attentionCredits by remember { mutableStateOf<AttentionCredits?>(null) }
+    var focusProgress by remember { mutableFloatStateOf(0f) }
+    var focusStatus by remember { mutableStateOf("") }
     var schedule by remember { mutableStateOf(prefsManager.getSchedule()) }
 
-    // Auto-refresh credits on broadcast from accessibility service
+    // Auto-refresh credits and focus progress on broadcast from accessibility service
     DisposableEffect(context) {
         val creditReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent?.action == TejAstraAccessibilityService.ACTION_CREDITS_UPDATED) {
                     attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+                } else if (intent?.action == "com.example.tejastra.FOCUS_PROGRESS") {
+                    focusProgress = intent.getFloatExtra("progress", 0f)
+                    focusStatus = intent.getStringExtra("status") ?: ""
                 }
             }
         }
-        val filter = android.content.IntentFilter(TejAstraAccessibilityService.ACTION_CREDITS_UPDATED)
+        val filter = android.content.IntentFilter().apply {
+            addAction(TejAstraAccessibilityService.ACTION_CREDITS_UPDATED)
+            addAction("com.example.tejastra.FOCUS_PROGRESS")
+        }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(creditReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -568,6 +576,41 @@ fun LauncherScreen() {
                                     letterSpacing = 1.sp,
                                 )
                             }
+                        }
+                    }
+
+                    // ── Focus Session Progress ──
+                    if (focusProgress > 0f || focusStatus.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Focus Session",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextDisabled,
+                                    letterSpacing = 2.sp,
+                                )
+                                Text(
+                                    text = focusStatus,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (focusStatus.contains("Earned")) Color(0xFF81C784) else TextTertiary,
+                                    letterSpacing = 1.sp,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { focusProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = Color(0xFF81C784),
+                                trackColor = Charcoal,
+                            )
                         }
                     }
 
