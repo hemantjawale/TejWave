@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TejAstra</string>
+    <string name="accessibility_service_description">TejAstra monitors which apps you open to show breathing exercises and block distracting content like Reels and mindless scrolling. No personal data is collected.</string>
+</resources>
