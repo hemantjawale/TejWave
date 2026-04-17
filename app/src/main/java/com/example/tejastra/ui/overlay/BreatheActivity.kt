@@ -47,6 +47,8 @@ class BreatheActivity : ComponentActivity() {
         val isDailyLimit = intent.getBooleanExtra("is_daily_limit", false)
         val isSessionExpired = intent.getBooleanExtra("is_session_expired", false)
         val isReelsBlock = intent.getBooleanExtra("is_reels_block", false)
+        val isCreditLimit = intent.getBooleanExtra("is_credit_limit", false)
+        val isDeepWorkBlock = intent.getBooleanExtra("is_deep_work_block", false)
 
         setContent {
             TejAstraTheme {
@@ -57,6 +59,8 @@ class BreatheActivity : ComponentActivity() {
                     isDailyLimit = isDailyLimit,
                     isSessionExpired = isSessionExpired,
                     isReelsBlock = isReelsBlock,
+                    isCreditLimit = isCreditLimit,
+                    isDeepWorkBlock = isDeepWorkBlock,
                     onProceed = {
                         TejAstraAccessibilityService.instance?.onBreatheComplete(packageName, timeLimit)
                         
@@ -93,11 +97,13 @@ fun BreatheScreen(
     isDailyLimit: Boolean,
     isSessionExpired: Boolean,
     isReelsBlock: Boolean,
+    isCreditLimit: Boolean,
+    isDeepWorkBlock: Boolean,
     onProceed: () -> Unit,
     onGoBack: () -> Unit,
 ) {
     var phase by remember { 
-        mutableIntStateOf(if (isSessionExpired || isReelsBlock) 3 else 0) 
+        mutableIntStateOf(if (isSessionExpired || isReelsBlock || isCreditLimit || isDeepWorkBlock) 3 else 0) 
     }
     // 0 = breathing animation
     // 1 = type reason
@@ -336,14 +342,25 @@ fun BreatheScreen(
                     3 -> {
                         // ── Block Info Phase ──
                         Text(
-                            text = if (isSessionExpired) "session expired" else "reels blocked",
+                            text = when {
+                                isSessionExpired -> "session expired"
+                                isReelsBlock -> "reels blocked"
+                                isCreditLimit -> "attention exhausted"
+                                isDeepWorkBlock -> "deep work mode"
+                                else -> "blocked"
+                            },
                             style = MaterialTheme.typography.headlineLarge,
                             color = Snow,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (isSessionExpired) "your time limit for ${appName.lowercase()} has ended." 
-                                   else "short-form content is blocked on ${appName.lowercase()}.",
+                            text = when {
+                                isSessionExpired -> "your time limit for ${appName.lowercase()} has ended." 
+                                isReelsBlock -> "short-form content is blocked on ${appName.lowercase()}."
+                                isCreditLimit -> "you have no attention credits left for today. reset happens at midnight."
+                                isDeepWorkBlock -> "You are in Deep Work Mode. Distractions are not allowed."
+                                else -> "access restricted."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextTertiary,
                             textAlign = TextAlign.Center,

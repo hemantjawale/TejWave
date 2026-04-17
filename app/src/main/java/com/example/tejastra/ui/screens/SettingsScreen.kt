@@ -39,6 +39,7 @@ import com.example.tejastra.utils.toTitleCase
 fun SettingsScreen(
     onBack: () -> Unit,
     onNavigateToFocusMode: (String) -> Unit,
+    onNavigateToSchedule: () -> Unit,
 ) {
     val context = LocalContext.current
     val prefsManager = remember { PrefsManager(context) }
@@ -163,6 +164,41 @@ fun SettingsScreen(
                     activeModeId = prefsManager.activeFocusModeId
                 },
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "Automation",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDisabled,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Charcoal)
+                    .clickable { onNavigateToSchedule() }
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Daily Schedule",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Snow,
+                    )
+                    Text(
+                        text = "Set time blocks for auto-focus",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary,
+                    )
+                }
+                Text("→", color = TextTertiary, style = MaterialTheme.typography.titleMedium)
+            }
+
 
             Spacer(modifier = Modifier.height(32.dp))
 

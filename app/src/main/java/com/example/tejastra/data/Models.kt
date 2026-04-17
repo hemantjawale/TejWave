@@ -99,3 +99,39 @@ data class NotificationFilterRule(
     val allowedContacts: List<String> = emptyList(), // Only show notifications from these people
     val urgencyKeywords: List<String> = emptyList(), // Show if message contains these keywords
 )
+
+/**
+ * Represents the attention credit system status.
+ */
+data class AttentionCredits(
+    val remainingCredits: Int,
+    val consumedCredits: Int,
+    val totalCredits: Int = 100
+)
+
+enum class TimeMode {
+    WORK, DEEP_WORK, BREAK, FREE_TIME
+}
+
+data class TimeBlock(
+    val id: String,
+    val mode: TimeMode,
+    val startHour: Int,
+    val startMinute: Int,
+    val endHour: Int,
+    val endMinute: Int,
+    val daysOfWeek: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7) // 1=Sun, 7=Sat
+)
+
+data class UserSchedulePreferences(
+    val wakeUpHour: Int = 7,
+    val wakeUpMinute: Int = 0,
+    val sleepHour: Int = 23,
+    val sleepMinute: Int = 0,
+    val workStartHour: Int = 9,
+    val workStartMinute: Int = 0,
+    val workEndHour: Int = 17,
+    val workEndMinute: Int = 0,
+    val focusDuration: Int = 45,
+    val breakDuration: Int = 15
+)

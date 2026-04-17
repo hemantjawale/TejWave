@@ -26,6 +26,9 @@ class TejAstraAccessibilityService : AccessibilityService() {
     private var scrollEventCount = 0
     private var lastScrollResetTime = 0L
     private var lastReelCheckTime = 0L
+    private var lastScheduleCheckTime = 0L
+    private var currentMode: com.example.tejastra.data.TimeMode = com.example.tejastra.data.TimeMode.FREE_TIME
+    private var breakStartTime: Long = 0L
 
     // Track which section of the app the user is in
     private var currentAppSection = AppSection.UNKNOWN
@@ -125,6 +128,13 @@ class TejAstraAccessibilityService : AccessibilityService() {
                 handleContentChange(event)
             }
         }
+
+        // ── Schedule Check (Every 1 minute) ──
+        val now = System.currentTimeMillis()
+        if (now - lastScheduleCheckTime > 60_000L) {
+            lastScheduleCheckTime = now
+            checkSchedule()
+        }
     }
 
     private fun handleWindowChange(event: AccessibilityEvent) {
@@ -147,6 +157,35 @@ class TejAstraAccessibilityService : AccessibilityService() {
             lastScrollResetTime = System.currentTimeMillis()
             currentAppSection = AppSection.UNKNOWN
 
+            // ── Mode-Based Blocking ──
+            if (isDistractingApp(packageName)) {
+                when (currentMode) {
+                    com.example.tejastra.data.TimeMode.DEEP_WORK -> {
+                        showDeepWorkBlockOverlay(packageName)
+                        return
+                    }
+                    com.example.tejastra.data.TimeMode.WORK -> {
+                        val tracker = ScreenTimeTracker(this)
+                        val credits = tracker.calculateAttentionCredits()
+                        if (credits.remainingCredits <= 0) {
+                            showCreditLimitOverlay(packageName)
+                            return
+                        }
+                    }
+                    com.example.tejastra.data.TimeMode.BREAK -> {
+                        if (breakStartTime == 0L) breakStartTime = System.currentTimeMillis()
+                        val elapsed = System.currentTimeMillis() - breakStartTime
+                        if (elapsed > 15 * 60 * 1000L) {
+                            // Break time over
+                        }
+                    }
+                    com.example.tejastra.data.TimeMode.FREE_TIME -> {
+                        // All good
+                    }
+                }
+            }
+
+            // Fallback to legacy block rules if not a distracting app or in normal modes
             val blockedApp = prefsManager.getBlockedAppConfig(packageName)
             if (blockedApp != null && breatheShownForPackage != packageName) {
                 if (ScreenTimeTracker.hasPermission(this)) {
@@ -301,6 +340,20 @@ class TejAstraAccessibilityService : AccessibilityService() {
 
     private fun handleContentChange(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
+        if (packageName == "com.android.systemui" || packageName == "com.example.tejastra") return
+
+        // ── Attention Credit Check (Periodic) ──
+        val now = System.currentTimeMillis()
+        if (now - lastReelCheckTime > 5000) {
+            val tracker = ScreenTimeTracker(this)
+            val credits = tracker.calculateAttentionCredits()
+            if (credits.remainingCredits <= 0 && isCreditConsumingApp(packageName)) {
+                showCreditLimitOverlay(packageName)
+                return
+            }
+            // Note: we don't update lastReelCheckTime here because we want the Reels check to run at its own pace
+        }
+
         val blockedApp = prefsManager.getBlockedAppConfig(packageName) ?: return
 
         if (!blockedApp.blockReels) return
@@ -314,7 +367,6 @@ class TejAstraAccessibilityService : AccessibilityService() {
             return
         }
 
-        val now = System.currentTimeMillis()
         if (now - lastReelCheckTime < 2000) return // Debounce 2 seconds (increased)
         lastReelCheckTime = now
 
@@ -401,6 +453,30 @@ class TejAstraAccessibilityService : AccessibilityService() {
         startActivity(intent)
     }
 
+    private fun showCreditLimitOverlay(packageName: String) {
+        val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("package_name", packageName)
+            putExtra("app_name", "this app")
+            putExtra("time_limit", 0)
+            putExtra("is_credit_limit", true)
+        }
+        startActivity(intent)
+    }
+
+    private fun isCreditConsumingApp(packageName: String): Boolean {
+        // Based on user requirements
+        return when {
+            packageName == INSTAGRAM -> true
+            packageName == YOUTUBE -> true
+            packageName == "com.whatsapp" -> true
+            // Gallery/Docs categories check
+            packageName.contains("gallery") || packageName.contains("photos") || 
+            packageName.contains("docs") || packageName.contains("reader") -> true
+            else -> false
+        }
+    }
+
     /**
      * Call this when the breathe overlay is dismissed (user chose to proceed).
      */
@@ -439,6 +515,59 @@ class TejAstraAccessibilityService : AccessibilityService() {
         breatheShownForPackage = null
         sessionTimer?.cancel()
         isSessionActive = false
+    }
+
+    private fun checkSchedule() {
+        val schedule = prefsManager.getSchedule()
+        if (schedule.isEmpty()) return
+
+        val now = java.util.Calendar.getInstance()
+        val currentHour = now.get(java.util.Calendar.HOUR_OF_DAY)
+        val currentMinute = now.get(java.util.Calendar.MINUTE)
+        val currentTimeInMins = currentHour * 60 + currentMinute
+        val currentDay = now.get(java.util.Calendar.DAY_OF_WEEK)
+
+        val activeBlock = schedule.find { block ->
+            val startMins = block.startHour * 60 + block.startMinute
+            val endMins = block.endHour * 60 + block.endMinute
+            
+            currentTimeInMins in startMins until endMins && block.daysOfWeek.contains(currentDay)
+        }
+
+        if (activeBlock != null) {
+            currentMode = activeBlock.mode
+            val targetModeId = when (activeBlock.mode) {
+                com.example.tejastra.data.TimeMode.WORK -> "work"
+                com.example.tejastra.data.TimeMode.DEEP_WORK -> "work"
+                else -> null
+            }
+            
+            if (targetModeId != null && prefsManager.activeFocusModeId != targetModeId) {
+                prefsManager.activeFocusModeId = targetModeId
+                Log.d(TAG, "Schedule: Auto-switched to mode $targetModeId (Logic Mode: $currentMode)")
+            }
+        } else {
+            currentMode = com.example.tejastra.data.TimeMode.FREE_TIME
+        }
+    }
+
+    private fun isDistractingApp(packageName: String): Boolean {
+        return packageName == INSTAGRAM || 
+               packageName == SNAPCHAT || 
+               packageName == FACEBOOK || 
+               packageName == TIKTOK ||
+               packageName == REDDIT
+    }
+
+    private fun showDeepWorkBlockOverlay(packageName: String) {
+        val intent = Intent(this, com.example.tejastra.ui.overlay.BreatheActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("package_name", packageName)
+            putExtra("app_name", "distractions")
+            putExtra("time_limit", 0)
+            putExtra("is_deep_work_block", true)
+        }
+        startActivity(intent)
     }
 
     override fun onInterrupt() {

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.tejastra.data.AttentionCredits
 import com.example.tejastra.data.LocationModeManager
 import com.example.tejastra.data.PrefsManager
 import com.example.tejastra.data.ScreenTimeTracker
@@ -118,6 +119,16 @@ fun LauncherScreen() {
     
     var batteryLevel by remember { mutableIntStateOf(-1) }
     var isCharging by remember { mutableStateOf(false) }
+    var attentionCredits by remember { mutableStateOf<AttentionCredits?>(null) }
+    var schedule by remember { mutableStateOf(prefsManager.getSchedule()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            attentionCredits = ScreenTimeTracker(context).calculateAttentionCredits()
+            schedule = prefsManager.getSchedule()
+            kotlinx.coroutines.delay(30000) // Update every 30s
+        }
+    }
 
     DisposableEffect(context) {
         val receiver = object : android.content.BroadcastReceiver() {
@@ -405,6 +416,101 @@ fun LauncherScreen() {
                             color = Snow,
                             fontWeight = FontWeight.Light,
                         )
+                    }
+
+                    // ── Attention Credits ──
+                    val currentCredits = attentionCredits
+                    if (currentCredits != null) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Column {
+                            Text(
+                                text = "Attention credits",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextDisabled,
+                                letterSpacing = 2.sp,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "${currentCredits.remainingCredits}/${currentCredits.totalCredits}",
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    color = if (currentCredits.remainingCredits < 20) Color(0xFFE57373) else Snow,
+                                    fontWeight = FontWeight.Light,
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "reset at midnight",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextTertiary,
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Daily Schedule Report ──
+                    if (schedule.isNotEmpty()) {
+                        val now = java.util.Calendar.getInstance()
+                        val currentMins = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+                        val activeBlock = schedule.find { block ->
+                            val startMins = block.startHour * 60 + block.startMinute
+                            val endMins = block.endHour * 60 + block.endMinute
+                            currentMins in startMins until endMins
+                        }
+                        
+                        if (activeBlock != null) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Column {
+                                Text(
+                                    text = "Current schedule",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextDisabled,
+                                    letterSpacing = 2.sp,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val modeColor = when (activeBlock.mode) {
+                                    com.example.tejastra.data.TimeMode.DEEP_WORK -> Color(0xFF81C784)
+                                    com.example.tejastra.data.TimeMode.WORK -> Color(0xFF64B5F6)
+                                    com.example.tejastra.data.TimeMode.BREAK -> Color(0xFFFFD54F)
+                                    com.example.tejastra.data.TimeMode.FREE_TIME -> Color(0xFFE57373)
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(8.dp).background(modeColor, androidx.compose.foundation.shape.CircleShape))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = activeBlock.mode.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
+                                        style = MaterialTheme.typography.headlineLarge,
+                                        color = Snow,
+                                        fontWeight = FontWeight.Light,
+                                    )
+                                }
+                                val endMins = activeBlock.endHour * 60 + activeBlock.endMinute
+                                val remaining = endMins - currentMins
+                                
+                                // Mode behavior info
+                                val modeBehavior = when (activeBlock.mode) {
+                                    com.example.tejastra.data.TimeMode.DEEP_WORK -> "Distractions blocked. Peak focus."
+                                    com.example.tejastra.data.TimeMode.WORK -> "Distractions consume credits."
+                                    com.example.tejastra.data.TimeMode.BREAK -> "No credits deducted. Relax."
+                                    com.example.tejastra.data.TimeMode.FREE_TIME -> "Unlimited access. Enjoy."
+                                }
+                                
+                                Text(
+                                    text = modeBehavior,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = modeColor.copy(alpha = 0.8f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Text(
+                                    text = "Ends at ${String.format("%02d:%02d", activeBlock.endHour, activeBlock.endMinute)} ($remaining mins left)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextTertiary,
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

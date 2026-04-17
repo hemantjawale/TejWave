@@ -32,6 +32,9 @@ class PrefsManager(context: Context) {
         private const val KEY_DRAWER_KEYBOARD_ON_OPEN = "drawer_keyboard_on_open"
         private const val KEY_CLOCK_24_HOUR = "clock_24_hour"
         private const val KEY_MODE_NOTIFICATION_RULES = "mode_notification_rules"
+        private const val KEY_SCHEDULE_BLOCKS = "schedule_blocks"
+        private const val KEY_SCHEDULE_PREFS = "schedule_prefs"
+        private const val KEY_LAST_SCHEDULE_GEN_DATE = "last_schedule_gen_date"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -394,6 +397,89 @@ class PrefsManager(context: Context) {
         current.removeAll { it.id == id }
         saveTasks(current)
     }
+
+    // ── Scheduling ────────────────────────────────────────────────────
+
+    fun getSchedule(): List<TimeBlock> {
+        val json = prefs.getString(KEY_SCHEDULE_BLOCKS, "[]") ?: "[]"
+        val arr = JSONArray(json)
+        val list = mutableListOf<TimeBlock>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val daysArr = obj.getJSONArray("daysOfWeek")
+            val days = mutableListOf<Int>()
+            for (j in 0 until daysArr.length()) { days.add(daysArr.getInt(j)) }
+            
+            list.add(
+                TimeBlock(
+                    id = obj.getString("id"),
+                    mode = TimeMode.valueOf(obj.getString("mode")),
+                    startHour = obj.getInt("startHour"),
+                    startMinute = obj.getInt("startMinute"),
+                    endHour = obj.getInt("endHour"),
+                    endMinute = obj.getInt("endMinute"),
+                    daysOfWeek = days
+                )
+            )
+        }
+        return list
+    }
+
+    fun saveSchedule(blocks: List<TimeBlock>) {
+        val arr = JSONArray()
+        blocks.forEach { block ->
+            val obj = JSONObject().apply {
+                put("id", block.id)
+                put("mode", block.mode.name)
+                put("startHour", block.startHour)
+                put("startMinute", block.startMinute)
+                put("endHour", block.endHour)
+                put("endMinute", block.endMinute)
+                val daysArr = JSONArray()
+                block.daysOfWeek.forEach { daysArr.put(it) }
+                put("daysOfWeek", daysArr)
+            }
+            arr.put(obj)
+        }
+        prefs.edit().putString(KEY_SCHEDULE_BLOCKS, arr.toString()).apply()
+    }
+
+    fun getSchedulePreferences(): UserSchedulePreferences {
+        val json = prefs.getString(KEY_SCHEDULE_PREFS, null) ?: return UserSchedulePreferences()
+        val obj = JSONObject(json)
+        return UserSchedulePreferences(
+            wakeUpHour = obj.optInt("wakeUpHour", 7),
+            wakeUpMinute = obj.optInt("wakeUpMinute", 0),
+            sleepHour = obj.optInt("sleepHour", 23),
+            sleepMinute = obj.optInt("sleepMinute", 0),
+            workStartHour = obj.optInt("workStartHour", 9),
+            workStartMinute = obj.optInt("workStartMinute", 0),
+            workEndHour = obj.optInt("workEndHour", 17),
+            workEndMinute = obj.optInt("workEndMinute", 0),
+            focusDuration = obj.optInt("focusDuration", 45),
+            breakDuration = obj.optInt("breakDuration", 15)
+        )
+    }
+
+    fun saveSchedulePreferences(prefs: UserSchedulePreferences) {
+        val obj = JSONObject().apply {
+            put("wakeUpHour", prefs.wakeUpHour)
+            put("wakeUpMinute", prefs.wakeUpMinute)
+            put("sleepHour", prefs.sleepHour)
+            put("sleepMinute", prefs.sleepMinute)
+            put("workStartHour", prefs.workStartHour)
+            put("workStartMinute", prefs.workStartMinute)
+            put("workEndHour", prefs.workEndHour)
+            put("workEndMinute", prefs.workEndMinute)
+            put("focusDuration", prefs.focusDuration)
+            put("breakDuration", prefs.breakDuration)
+        }
+        this.prefs.edit().putString(KEY_SCHEDULE_PREFS, obj.toString()).apply()
+    }
+
+    var lastScheduleGenDate: String
+        get() = prefs.getString(KEY_LAST_SCHEDULE_GEN_DATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_SCHEDULE_GEN_DATE, value).apply()
 
     // ── Onboarding ────────────────────────────────────────────────────
 

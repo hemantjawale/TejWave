@@ -202,6 +202,43 @@ class ScreenTimeTracker(private val context: Context) {
         return (usageMap[packageName] ?: 0L) / 60000
     }
 
+    /**
+     * Calculates the total attention credits consumed today based on usage rules.
+     */
+    fun calculateAttentionCredits(): AttentionCredits {
+        val summary = getTodaySummary()
+        var consumed = 0.0
+
+        summary.appUsages.forEach { app ->
+            val minutes = app.usageTimeMinutes.toDouble()
+            
+            val multiplier = when {
+                app.packageName == "com.instagram.android" -> 10.0
+                app.packageName == "com.snapchat.android" -> 8.0
+                app.packageName == "com.facebook.katana" -> 8.0
+                app.packageName == "com.google.android.youtube" -> 3.0
+                app.packageName == "com.whatsapp" -> 1.0
+                app.categoryName in listOf("Image", "Productivity", "News") -> 2.0
+                app.categoryName == "Social" -> 5.0 // Generic social apps (FB, etc) get a middle penalty
+                app.categoryName == "Gaming" -> 5.0
+                app.categoryName == "Video" -> 3.0
+                else -> 0.0 // Default apps (Launcher, Phone, Settings, etc) don't consume credits
+            }
+            
+            consumed += (minutes * multiplier)
+        }
+
+        val totalConsumed = consumed.toInt()
+        val totalCredits = 100
+        val remaining = (totalCredits - totalConsumed).coerceAtLeast(0)
+
+        return AttentionCredits(
+            remainingCredits = remaining,
+            consumedCredits = totalConsumed,
+            totalCredits = totalCredits
+        )
+    }
+
     companion object {
         fun hasPermission(context: Context): Boolean {
             val usm =

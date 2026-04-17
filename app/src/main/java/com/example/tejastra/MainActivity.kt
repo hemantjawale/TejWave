@@ -81,6 +81,13 @@ fun TejAstraApp() {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToFocusMode = { modeId -> navController.navigate("focus_mode/$modeId") },
+                onNavigateToSchedule = { navController.navigate("schedule") }
+            )
+        }
+
+        composable("schedule") {
+            ScheduleSettingsScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
