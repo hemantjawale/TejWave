@@ -303,7 +303,7 @@ fun DashboardScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Instagram: 10 credits/min · YouTube: 3/min",
+                            text = "⊖ Instagram: −10/min  ⊕ Productive: +5/min",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextTertiary,
                         )

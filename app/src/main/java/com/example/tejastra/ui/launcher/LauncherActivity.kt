@@ -484,7 +484,7 @@ fun LauncherScreen() {
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Instagram: 10 credits/min",
+                                text = "⊖ Instagram: −10/min  ⊕ Productive: +5/min",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextDisabled,
                                 letterSpacing = 0.5.sp,

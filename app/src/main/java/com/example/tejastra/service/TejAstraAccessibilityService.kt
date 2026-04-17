@@ -125,18 +125,26 @@ class TejAstraAccessibilityService : AccessibilityService() {
         
         usageRecordingTask = object : Runnable {
             override fun run() {
-                // Deduct credits for credit-consuming apps in ALL modes.
-                // Deep Work already hard-blocks distracting apps, so they won't be in foreground.
-                // Break / Free Time still deduct — this is the user's chosen discipline rule.
                 currentForegroundPackage?.let { pkg ->
-                    if (isCreditConsumingApp(pkg)) {
-                        val tracker = ScreenTimeTracker(this@TejAstraAccessibilityService)
-                        tracker.recordUsage(pkg)
-                        Log.d(TAG, "Deducted credits for $pkg (mode=$currentMode)")
-                        // Notify the launcher to refresh credits display
-                        sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
+                    val tracker = ScreenTimeTracker(this@TejAstraAccessibilityService)
+                    when {
+                        // Distracting apps consume credits
+                        isCreditConsumingApp(pkg) -> {
+                            tracker.recordUsage(pkg)
+                            Log.d(TAG, "⊖ Credits deducted for $pkg")
+                            sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
+                        }
+                        // Productive apps earn credits back
+                        tracker.isProductiveApp(pkg) -> {
+                            tracker.recordProductiveUsage(pkg)
+                            Log.d(TAG, "⊕ Credits earned for productive app $pkg")
+                            sendBroadcast(Intent(ACTION_CREDITS_UPDATED))
+                        }
+                        else -> {
+                            Log.d(TAG, "⊘ Neutral app (no credit change): $pkg")
+                        }
                     }
-                }
+                } ?: Log.d(TAG, "No foreground app tracked (home screen)")
                 handler.postDelayed(this, 60000) // Every minute
             }
         }
@@ -169,12 +177,16 @@ class TejAstraAccessibilityService : AccessibilityService() {
     private fun handleWindowChange(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
 
-        // Ignore system UI and our own package
+        // When user returns to home screen / system UI, clear the foreground tracker
+        // so credits stop being consumed/earned for the previous app.
         if (packageName == "com.android.systemui" ||
             packageName == "com.example.tejastra" ||
             packageName == "com.android.launcher" ||
             packageName.contains("launcher")
-        ) return
+        ) {
+            currentForegroundPackage = null
+            return
+        }
 
         // Update the current section whenever a window changes
         updateCurrentSection(event)
@@ -495,14 +507,14 @@ class TejAstraAccessibilityService : AccessibilityService() {
     }
 
     private fun isCreditConsumingApp(packageName: String): Boolean {
-        // Based on user requirements
-        return when {
-            packageName == INSTAGRAM -> true
-            packageName == YOUTUBE -> true
-            packageName == "com.whatsapp" -> true
-            // Gallery/Docs categories check
-            packageName.contains("gallery") || packageName.contains("photos") || 
-            packageName.contains("docs") || packageName.contains("reader") -> true
+        return when (packageName) {
+            INSTAGRAM -> true
+            YOUTUBE -> true
+            SNAPCHAT -> true
+            FACEBOOK -> true
+            TIKTOK -> true
+            REDDIT -> true
+            "com.whatsapp" -> true
             else -> false
         }
     }

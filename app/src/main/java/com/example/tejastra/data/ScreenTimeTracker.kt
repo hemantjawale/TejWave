@@ -226,12 +226,24 @@ class ScreenTimeTracker(private val context: Context) {
     }
 
     /**
-     * Increments the consumed credits based on current app usage in Normal Work mode.
+     * Increments the consumed credits based on current app usage (distracting apps).
      */
     fun recordUsage(packageName: String) {
         val multiplier = getMultiplierForApp(packageName)
         if (multiplier > 0) {
             prefsManager.attentionCreditsConsumed += multiplier.toInt()
+        }
+    }
+
+    /**
+     * Decreases consumed credits (earns back) for productive app usage.
+     * Credits earned = 5 per minute. Cannot go below 0 consumed (i.e. max 100 remaining).
+     */
+    fun recordProductiveUsage(packageName: String) {
+        if (isProductiveApp(packageName)) {
+            val earned = 5
+            val newConsumed = (prefsManager.attentionCreditsConsumed - earned).coerceAtLeast(0)
+            prefsManager.attentionCreditsConsumed = newConsumed
         }
     }
 
@@ -253,7 +265,108 @@ class ScreenTimeTracker(private val context: Context) {
         }
     }
 
+    /**
+     * Returns true if the app is considered productive and earns credits back.
+     * Uses both exact package matches and prefix matching for entire app families.
+     */
+    fun isProductiveApp(packageName: String): Boolean {
+        // Exact match
+        if (packageName in productiveAppPackages) return true
+        // Prefix match for app families
+        if (productiveAppPrefixes.any { packageName.startsWith(it) }) return true
+        return false
+    }
+
     companion object {
+        /** Prefixes that cover entire productive app families */
+        private val productiveAppPrefixes = listOf(
+            "com.microsoft.office.",       // All MS Office apps
+            "com.microsoft.teams",         // MS Teams
+            "com.microsoft.skydrive",      // OneDrive
+            "com.microsoft.todos",         // MS To Do
+            "com.google.android.apps.docs",// Google Drive/Docs/Sheets/Slides
+            "com.google.android.apps.classroom",
+            "com.google.android.apps.meetings",
+            "com.google.android.apps.tasks",
+            "com.adobe.",                  // All Adobe apps (Reader, Scan, etc.)
+        )
+
+        /** Comprehensive list of productive app package names */
+        private val productiveAppPackages = setOf(
+            // Google Workspace
+            "com.google.android.apps.docs",              // Google Drive
+            "com.google.android.apps.docs.editors.docs",  // Google Docs
+            "com.google.android.apps.docs.editors.sheets",// Google Sheets
+            "com.google.android.apps.docs.editors.slides",// Google Slides
+            "com.google.android.apps.classroom",          // Google Classroom
+            "com.google.android.calendar",                // Google Calendar
+            "com.google.android.keep",                    // Google Keep
+            "com.google.android.apps.meetings",           // Google Meet
+            "com.google.android.apps.pdfviewer",          // Google PDF Viewer
+
+            // Microsoft Office & Productivity
+            "com.microsoft.office.word",                  // MS Word
+            "com.microsoft.office.excel",                 // MS Excel
+            "com.microsoft.office.powerpoint",            // MS PowerPoint
+            "com.microsoft.office.onenote",               // OneNote
+            "com.microsoft.office.outlook",               // Outlook
+            "com.microsoft.teams",                        // MS Teams
+            "com.microsoft.office.officehubrow",          // MS Office Hub
+            "com.microsoft.office.officehubhl",           // MS Office Hub (alt)
+            "com.microsoft.skydrive",                     // OneDrive
+            "com.microsoft.todos",                        // Microsoft To Do
+
+            // AI Assistants
+            "com.openai.chatgpt",                         // ChatGPT
+            "com.anthropic.claude",                        // Claude AI
+            "com.google.android.apps.bard",               // Google Gemini
+            "com.google.android.apps.googleassistant",    // Google Assistant
+
+            // PDF & Document Readers
+            "com.adobe.reader",                            // Adobe Acrobat Reader
+            "com.adobe.scan",                              // Adobe Scan
+            "com.xodo.pdf.reader",                         // Xodo PDF Reader
+            "com.foxit.mobile.pdf.lite",                   // Foxit PDF Reader
+            "cn.wps.moffice_eng",                          // WPS Office
+            "com.artifex.mupdf.viewer.app",                // MuPDF
+            "com.kdanmobile.android.pdfreader.google.complimentary", // PDF Reader
+            "com.google.android.apps.pdfviewer",           // Google PDF Viewer
+            "com.onyx.dox",                                // OnyxBoox PDF
+            "org.readera",                                 // ReadEra
+            "com.librera.reader",                          // Librera Reader
+
+            // Book & Reading
+            "com.amazon.kindle",                           // Kindle
+            "com.google.android.apps.books",               // Google Play Books
+
+            // Video Conferencing
+            "us.zoom.videomeetings",                      // Zoom
+            "com.cisco.webex.meetings",                   // Webex
+
+            // Coding & Dev
+            "com.github.android",                         // GitHub
+
+            // Note-taking & Learning
+            "com.notion.id",                              // Notion
+            "com.evernote",                                // Evernote
+            "com.duolingo",                                // Duolingo
+            "com.quizlet.quizletandroid",                  // Quizlet
+            "com.linkedin.android",                        // LinkedIn
+            "com.udemy.android",                           // Udemy
+            "com.coursera.app",                            // Coursera
+            "com.khanacademy.android",                     // Khan Academy
+            "com.medium.reader",                           // Medium
+
+            // Productivity
+            "com.todoist",                                 // Todoist
+            "com.ticktick.task",                            // TickTick
+            "com.slack",                                   // Slack
+            "com.Slack",                                   // Slack (alt)
+            "com.trello",                                  // Trello
+            "com.google.android.apps.tasks",               // Google Tasks
+            "com.google.android.gm",                       // Gmail
+        )
+
         fun hasPermission(context: Context): Boolean {
             val usm =
                 context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
