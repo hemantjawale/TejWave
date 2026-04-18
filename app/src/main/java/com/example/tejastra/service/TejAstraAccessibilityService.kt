@@ -273,8 +273,21 @@ class TejAstraAccessibilityService : AccessibilityService() {
             lastScrollResetTime = System.currentTimeMillis()
             currentAppSection = AppSection.UNKNOWN
 
+            val isDistracting = isDistractingApp(packageName) || (packageName == YOUTUBE && isViewingShorts(event))
+            val isExplicitlyBlocked = prefsManager.getBlockedAppConfig(packageName) != null
+
+            if ((isDistracting || isExplicitlyBlocked) && prefsManager.autoPayEnabled) {
+                val intent = android.content.Intent(this, com.example.tejastra.ui.launcher.LauncherActivity::class.java).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("trigger_autopay", true)
+                    putExtra("autopay_package", packageName)
+                }
+                startActivity(intent)
+                return
+            }
+
             // ── Mode-Based Blocking ──
-            if (isDistractingApp(packageName) || (packageName == YOUTUBE && isViewingShorts(event))) {
+            if (isDistracting) {
                 when (currentMode) {
                     com.example.tejastra.data.TimeMode.DEEP_WORK -> {
                         val reason = if (packageName == YOUTUBE) "YouTube Shorts are blocked in Deep Work." else "You are in Deep Work Mode. Distractions are not allowed."

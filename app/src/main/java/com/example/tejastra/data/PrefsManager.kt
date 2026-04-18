@@ -41,6 +41,7 @@ class PrefsManager(context: Context) {
         private const val KEY_TIMES_DISTRACTION_BLOCKED = "times_distraction_blocked"
         private const val KEY_PRODUCTIVE_SESSIONS_COMPLETED = "productive_sessions_completed"
         private const val KEY_PRODUCTIVE_TIME_MINUTES = "productive_time_minutes"
+        private const val KEY_AUTOPAY_ENABLED = "autopay_enabled"
     }
 
     // ── Blocked Apps ──────────────────────────────────────────────────
@@ -513,6 +514,10 @@ class PrefsManager(context: Context) {
     var productiveTimeMinutes: Int
         get() = prefs.getInt(KEY_PRODUCTIVE_TIME_MINUTES, 0)
         set(value) = prefs.edit().putInt(KEY_PRODUCTIVE_TIME_MINUTES, value).apply()
+
+    var autoPayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTOPAY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTOPAY_ENABLED, value).apply()
 
     // ── Onboarding ────────────────────────────────────────────────────
 

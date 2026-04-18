@@ -831,6 +831,59 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            // ── AutoPay by Razorpay ──
+            var isAutoPayEnabled by remember { mutableStateOf(prefsManager.autoPayEnabled) }
+            Text(
+                text = "Razorpay AutoPay Penalty",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDisabled,
+                letterSpacing = 2.sp,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isAutoPayEnabled) Charcoal else SurfaceDim)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        prefsManager.autoPayEnabled = !isAutoPayEnabled
+                        isAutoPayEnabled = prefsManager.autoPayEnabled
+                    }
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Brute-force penalty mode",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Snow,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Automatically deducts 1 INR using Razorpay when you attempt to open a blocked distracting app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextTertiary,
+                        lineHeight = 18.sp,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(
+                            if (isAutoPayEnabled) Snow else TextDisabled,
+                            androidx.compose.foundation.shape.CircleShape
+                        )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+            Divider(color = BorderSubtle, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(32.dp))
+
             // ── Dumb Phone Mode ──
             Text(
                 text = "Dumb-phone mode",

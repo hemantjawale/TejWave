@@ -69,6 +69,7 @@ class LauncherActivity : ComponentActivity(), PaymentResultListener {
         private const val RAZORPAY_KEY_ID = "rzp_live_Ru1kOSbo78LMRS"
         private const val CREDITS_PER_PURCHASE = 50
         private const val PRICE_PAISE = 100 // ₹1 = 100 paise
+        var isProcessingPenalty = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,6 +86,20 @@ class LauncherActivity : ComponentActivity(), PaymentResultListener {
             TejAstraTheme {
                 LauncherScreen()
             }
+        }
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("trigger_autopay", false) == true) {
+            val packageName = intent.getStringExtra("autopay_package") ?: "Distracting App"
+            startAutoPayPenalty(packageName)
         }
     }
 
@@ -110,15 +125,45 @@ class LauncherActivity : ComponentActivity(), PaymentResultListener {
         }
     }
 
+    private fun startAutoPayPenalty(packageName: String) {
+        isProcessingPenalty = true
+        val checkout = Checkout()
+        checkout.setKeyID(RAZORPAY_KEY_ID)
+
+        try {
+            val options = org.json.JSONObject()
+            options.put("name", "TejAstra AutoPay")
+            options.put("description", "1 INR Penalty for opening distraction")
+            options.put("currency", "INR")
+            options.put("amount", 100) // ₹1 in paise
+            options.put("retry", org.json.JSONObject().put("enabled", true).put("max_count", 3))
+
+            val theme = org.json.JSONObject()
+            theme.put("color", "#E57373")
+            options.put("theme", theme)
+
+            checkout.open(this, options)
+        } catch (e: Exception) {
+            isProcessingPenalty = false
+            android.widget.Toast.makeText(this, "AutoPay error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onPaymentSuccess(razorpayPaymentID: String?) {
-        // Add 50 credits to the total pool
-        val prefsManager = PrefsManager(this)
-        prefsManager.purchasedCredits += CREDITS_PER_PURCHASE
-        android.widget.Toast.makeText(this, "✓ $CREDITS_PER_PURCHASE credits added!", android.widget.Toast.LENGTH_SHORT).show()
-        onPaymentResult?.invoke(true, CREDITS_PER_PURCHASE)
+        if (isProcessingPenalty) {
+            isProcessingPenalty = false
+            android.widget.Toast.makeText(this, "₹1 Penalty Paid for Distraction", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            // Add 50 credits to the total pool
+            val prefsManager = PrefsManager(this)
+            prefsManager.purchasedCredits += CREDITS_PER_PURCHASE
+            android.widget.Toast.makeText(this, "✓ $CREDITS_PER_PURCHASE credits added!", android.widget.Toast.LENGTH_SHORT).show()
+            onPaymentResult?.invoke(true, CREDITS_PER_PURCHASE)
+        }
     }
 
     override fun onPaymentError(code: Int, response: String?) {
+        isProcessingPenalty = false
         android.widget.Toast.makeText(this, "Payment cancelled", android.widget.Toast.LENGTH_SHORT).show()
         onPaymentResult?.invoke(false, 0)
     }
